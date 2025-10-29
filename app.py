@@ -32,25 +32,119 @@ def init_app():
 
 init_app()
 
-# Basic styling for clean appearance
+# Clean, minimal styling
 st.markdown("""
 <style>
+    /* Global Styles */
     .main .block-container {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
+        padding-top: 1.5rem;
+        padding-bottom: 1.5rem;
         max-width: 100%;
     }
     
+    /* Header Styling */
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+    
+    /* Section Headers */
+    h1, h2, h3 {
+        color: #1e293b;
+        font-weight: 600;
+    }
+    
+    h2 {
+        font-size: 1.6rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #3b82f6;
+    }
+    
+    /* Chiller Cards */
+    .chiller-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease;
+    }
+    
+    .chiller-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    .best-option {
+        border-left: 4px solid #10b981;
+        background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+    }
+    
+    .alternative {
+        border-left: 4px solid #f59e0b;
+        background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+    }
+    
+    /* Button Styling */
     .stButton > button {
-        background-color: #1f77b4;
+        background-color: #3b82f6;
         color: white;
         border: none;
-        border-radius: 4px;
+        border-radius: 6px;
         font-weight: 500;
+        transition: all 0.2s ease;
     }
     
     .stButton > button:hover {
-        background-color: #0d5a8a;
+        background-color: #2563eb;
+        transform: translateY(-1px);
+    }
+    
+    /* Form Elements */
+    .stSelectbox > div > div {
+        border-radius: 6px;
+    }
+    
+    .stNumberInput > div > div > input {
+        border-radius: 6px;
+    }
+    
+    /* Metrics */
+    .metric-container {
+        background: #f8fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        text-align: center;
+        border: 1px solid #e2e8f0;
+    }
+    
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 0.25rem;
+    }
+    
+    .metric-label {
+        font-size: 0.8rem;
+        color: #64748b;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Search Summary */
+    .search-summary {
+        background: #dbeafe;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        border: 1px solid #93c5fd;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -59,8 +153,8 @@ def main():
     """Main application function."""
     
     # Header
-    st.title("❄️ Chiller Picker Pro")
-    st.markdown("Professional chiller selection and comparison tool")
+    st.markdown('<h1 class="main-header">❄️ Chiller Picker Pro</h1>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align: center; color: #64748b; font-size: 1.1rem; margin-bottom: 2rem;">Professional chiller selection and comparison tool</p>', unsafe_allow_html=True)
     
     # Sidebar for navigation
     with st.sidebar:
@@ -331,7 +425,7 @@ def search_page():
         # Display search summary
         if not results['no_matches']:
             search_summary = selector_obj.get_search_summary(results['search_info'])
-            st.info(f"**Search Results:** {search_summary}")
+            st.markdown(f'<div class="search-summary"><strong>Search Results:</strong> {search_summary}</div>', unsafe_allow_html=True)
         
         # Display results
         if results['no_matches']:
@@ -401,6 +495,8 @@ def display_chiller_card(chiller_data: dict, title: str, card_class: str):
     formatted = selector.ChillerSelector().format_chiller_display(chiller_data)
     
     with st.container():
+        st.markdown(f'<div class="chiller-card {card_class}">', unsafe_allow_html=True)
+        
         # Chiller title and info
         chiller_name = formatted['details']['model']
         manufacturer = formatted['details']['manufacturer']
@@ -408,20 +504,35 @@ def display_chiller_card(chiller_data: dict, title: str, card_class: str):
         st.subheader(f"{chiller_name} ({manufacturer})")
         st.caption(formatted['temp_info'])
         
-        # Main metrics
+        # Main metrics with custom styling
         col1, col2, col3 = st.columns(3)
         
         with col1:
             capacity = formatted['capacity_tons']
-            st.metric("Capacity", f"{capacity:.1f} tons")
+            st.markdown(f'''
+            <div class="metric-container">
+                <div class="metric-value">{capacity:.1f} tons</div>
+                <div class="metric-label">Capacity</div>
+            </div>
+            ''', unsafe_allow_html=True)
         
         with col2:
             efficiency = formatted['efficiency_kw_per_ton']
-            st.metric("Efficiency", f"{efficiency:.3f} kW/ton")
+            st.markdown(f'''
+            <div class="metric-container">
+                <div class="metric-value">{efficiency:.3f} kW/ton</div>
+                <div class="metric-label">Efficiency</div>
+            </div>
+            ''', unsafe_allow_html=True)
         
         with col3:
             waterflow = formatted['waterflow_usgpm']
-            st.metric("Waterflow", f"{waterflow:.1f} USgpm")
+            st.markdown(f'''
+            <div class="metric-container">
+                <div class="metric-value">{waterflow:.1f} USgpm</div>
+                <div class="metric-label">Waterflow</div>
+            </div>
+            ''', unsafe_allow_html=True)
         
         # Expandable details
         with st.expander("View more details", expanded=False):
@@ -498,6 +609,8 @@ def display_chiller_card(chiller_data: dict, title: str, card_class: str):
                     st.write("**Notes:**")
                 with col2:
                     st.write(details['notes'])
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def display_all_matches_table(all_matches: list):
     """Display all matches in a table format."""
@@ -521,7 +634,7 @@ def display_all_matches_table(all_matches: list):
         })
     
     df = pd.DataFrame(display_data)
-    st.dataframe(df, width='stretch')
+    st.dataframe(df, use_container_width=True)
 
 def import_page():
     """Data import interface."""
@@ -572,15 +685,15 @@ def import_page():
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            parse_button = st.button("Parse Data", type="primary", width='stretch')
+            parse_button = st.button("Parse Data", type="primary", use_container_width=True)
         
         with col2:
             # Check if we have parsed data ready to import
             if 'parsed_df' in st.session_state and not st.session_state['parsed_df'].empty:
-                import_button = st.button("Import to Database", type="primary", width='stretch', key="import_btn")
+                import_button = st.button("Import to Database", type="primary", use_container_width=True, key="import_btn")
             else:
                 import_button = False
-                st.button("Import to Database", disabled=True, width='stretch', key="import_btn_disabled")
+                st.button("Import to Database", disabled=True, use_container_width=True, key="import_btn_disabled")
                 st.caption("Parse data first to enable import")
         
         # Handle parse button
@@ -683,7 +796,7 @@ def import_page():
                         help="Apply this LWT to all imported rows"
                     )
             
-            if st.button("Import File", type="primary", width='stretch'):
+            if st.button("Import File", type="primary", use_container_width=True):
                 with st.spinner("Importing file..."):
                     # Save uploaded file temporarily
                     with open("temp_upload.csv", "wb") as f:
@@ -764,7 +877,7 @@ def stats_page():
                                 display_cols = ['model', 'capacity_tons', 'efficiency_kw_per_ton', 'waterflow_usgpm']
                                 available_cols = [col for col in display_cols if col in folder_df.columns]
                                 if available_cols:
-                                    st.dataframe(folder_df[available_cols], width='stretch')
+                                    st.dataframe(folder_df[available_cols], use_container_width=True)
                             
                             if st.button("Close", key=f"close_{model_prefix}_{folder_name}"):
                                 st.session_state[f"view_folder_{model_prefix}_{folder_name}"] = False
@@ -885,7 +998,7 @@ def manage_page():
                         # Display the table
                         st.dataframe(
                             display_df[available_cols],
-                            width='stretch',
+                            use_container_width=True,
                             hide_index=True
                         )
                         
