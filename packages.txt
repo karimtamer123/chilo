@@ -1,0 +1,8 @@
+# This file is used by Streamlit Cloud for deployment
+# Streamlit Cloud uses packages.txt instead of requirements.txt
+
+streamlit>=1.28.0
+pandas>=2.0.0
+plotly>=5.0.0
+pyperclip>=1.8.0
+
