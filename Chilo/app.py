@@ -1,0 +1,1329 @@
+import streamlit as st
+import pandas as pd
+import json
+from typing import Optional, List, Dict
+from datetime import datetime
+import plotly.graph_objects as go
+import plotly.express as px
+import os
+import db
+import importer
+import selector
+from utils import safe_float
+
+# Page configuration
+st.set_page_config(
+    page_title="Chiller Picker Pro",
+    page_icon="❄️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/your-repo/chiller-picker',
+        'Report a bug': 'https://github.com/your-repo/chiller-picker/issues',
+        'About': 'Professional chiller selection and comparison tool'
+    }
+)
+
+# Initialize database
+@st.cache_resource
+def init_app():
+    """Initialize the application and database."""
+    db.init_database()
+    return True
+
+init_app()
+
+# Apple-style minimal design
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    /* Global Styles - Apple-inspired */
+    * {
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    
+    .stApp {
+        background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
+    }
+    
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1400px;
+    }
+    
+    /* Landing Page Hero Section */
+    .hero-container {
+        text-align: center;
+        padding: 4rem 2rem 3rem;
+        margin-bottom: 3rem;
+    }
+    
+    .company-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+        padding: 0;
+    }
+    
+    .company-logo {
+        height: 70px;
+        max-width: 220px;
+        object-fit: contain;
+    }
+    
+    .company-name {
+        font-size: 2.25rem;
+        font-weight: 600;
+        color: #1d1d1f;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+    
+    .main-header {
+        font-size: 3.5rem;
+        font-weight: 700;
+        color: #1d1d1f;
+        margin: 0 0 1rem 0;
+        letter-spacing: -1px;
+        line-height: 1.1;
+    }
+    
+    .hero-subtitle {
+        font-size: 1.25rem;
+        font-weight: 400;
+        color: #86868b;
+        margin: 0;
+        letter-spacing: -0.2px;
+    }
+    
+    /* Section Headers */
+    h1, h2, h3 {
+        color: #1d1d1f;
+        font-weight: 600;
+        letter-spacing: -0.3px;
+    }
+    
+    h2 {
+        font-size: 1.75rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: none;
+        font-weight: 600;
+        letter-spacing: -0.4px;
+    }
+    
+    /* Sidebar - Apple Style */
+    [data-testid="stSidebar"] {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: saturate(180%) blur(20px);
+        border-right: 0.5px solid rgba(0, 0, 0, 0.1);
+    }
+    
+    [data-testid="stSidebar"] > div:first-child {
+        padding: 2rem 1.5rem;
+    }
+    
+    [data-testid="stSidebar"] h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1d1d1f;
+        margin-bottom: 1.5rem;
+        letter-spacing: -0.2px;
+    }
+    
+    [data-testid="stSidebar"] .stRadio > label {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: #1d1d1f;
+        padding: 0.75rem 1rem;
+        border-radius: 10px;
+        margin-bottom: 0.5rem;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    [data-testid="stSidebar"] .stRadio > label:hover {
+        background: rgba(0, 0, 0, 0.04);
+    }
+    
+    [data-testid="stSidebar"] .stRadio [type="radio"]:checked + label {
+        background: rgba(0, 122, 255, 0.1);
+        color: #007AFF;
+    }
+    
+    [data-testid="stSidebar"] .stInfo {
+        background: rgba(0, 122, 255, 0.08);
+        border: none;
+        border-radius: 12px;
+        padding: 1rem;
+        font-size: 0.875rem;
+        color: #1d1d1f;
+        margin-top: 2rem;
+    }
+    
+    /* Chiller Cards - Apple Style */
+    .chiller-card {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: saturate(180%) blur(20px);
+        padding: 2rem;
+        border-radius: 18px;
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .chiller-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.08);
+        border-color: rgba(0, 0, 0, 0.12);
+    }
+    
+    .best-option {
+        border-left: 3px solid #34C759;
+        background: rgba(52, 199, 89, 0.03);
+    }
+    
+    .alternative {
+        border-left: 3px solid #FF9500;
+        background: rgba(255, 149, 0, 0.03);
+    }
+    
+    /* Button Styling - Apple Style */
+    .stButton > button {
+        background: #007AFF;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-weight: 500;
+        font-size: 0.95rem;
+        padding: 0.625rem 1.5rem;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 8px rgba(0, 122, 255, 0.2);
+    }
+    
+    .stButton > button:hover {
+        background: #0051D5;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+    }
+    
+    /* Form Elements - Apple Style */
+    .stSelectbox > div > div {
+        border-radius: 12px;
+        border: 0.5px solid rgba(0, 0, 0, 0.15);
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: saturate(180%) blur(20px);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .stSelectbox > div > div:focus-within {
+        border-color: #007AFF;
+        box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+    }
+    
+    .stNumberInput > div > div > input {
+        border-radius: 12px;
+        border: 0.5px solid rgba(0, 0, 0, 0.15);
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: saturate(180%) blur(20px);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .stNumberInput > div > div > input:focus {
+        border-color: #007AFF;
+        box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+    }
+    
+    /* Metrics - Apple Style */
+    .metric-container {
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: saturate(180%) blur(20px);
+        padding: 1.5rem 1rem;
+        border-radius: 14px;
+        text-align: center;
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .metric-container:hover {
+        background: rgba(255, 255, 255, 0.8);
+        transform: translateY(-2px);
+    }
+    
+    .metric-value {
+        font-size: 1.875rem;
+        font-weight: 600;
+        color: #1d1d1f;
+        margin-bottom: 0.5rem;
+        letter-spacing: -0.5px;
+    }
+    
+    .metric-label {
+        font-size: 0.75rem;
+        color: #86868b;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Search Summary - Apple Style */
+    .search-summary {
+        background: rgba(0, 122, 255, 0.08);
+        backdrop-filter: saturate(180%) blur(20px);
+        padding: 1.25rem 1.5rem;
+        border-radius: 14px;
+        margin-bottom: 2rem;
+        border: 0.5px solid rgba(0, 122, 255, 0.2);
+        font-size: 0.95rem;
+        color: #1d1d1f;
+    }
+    
+    /* Form Container */
+    .stForm {
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: saturate(180%) blur(20px);
+        padding: 2rem;
+        border-radius: 18px;
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    }
+    
+    /* Quick Filter Buttons */
+    .stButton button[kind="secondary"] {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: saturate(180%) blur(20px);
+        color: #1d1d1f;
+        border: 0.5px solid rgba(0, 0, 0, 0.15);
+        font-weight: 500;
+        border-radius: 12px;
+    }
+    
+    .stButton button[kind="secondary"]:hover {
+        background: rgba(255, 255, 255, 1);
+        border-color: rgba(0, 0, 0, 0.25);
+        transform: translateY(-1px);
+    }
+    
+    /* Expander Styling - Apple Style */
+    .streamlit-expanderHeader {
+        font-weight: 500;
+        color: #1d1d1f;
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: saturate(180%) blur(20px);
+        padding: 1rem;
+        border-radius: 12px;
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .streamlit-expanderHeader:hover {
+        background: rgba(255, 255, 255, 0.8);
+    }
+    
+    .streamlit-expanderContent {
+        background: rgba(255, 255, 255, 0.4);
+        backdrop-filter: saturate(180%) blur(20px);
+        padding: 1.5rem;
+        border-radius: 0 0 12px 12px;
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        border-top: none;
+    }
+    
+    /* Table Styling */
+    .stDataFrame {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: saturate(180%) blur(20px);
+        border-radius: 14px;
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+    
+    /* Divider */
+    hr {
+        border: none;
+        border-top: 0.5px solid rgba(0, 0, 0, 0.1);
+        margin: 2.5rem 0;
+    }
+    
+    /* Alert/Info Messages */
+    .stAlert {
+        border-radius: 14px;
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        backdrop-filter: saturate(180%) blur(20px);
+    }
+    
+    /* Chart Container */
+    [data-testid="stPlotlyChart"] {
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: saturate(180%) blur(20px);
+        padding: 1.5rem;
+        border-radius: 18px;
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    }
+    
+    /* Caption Styling */
+    .stCaption {
+        color: #86868b;
+        font-size: 0.875rem;
+    }
+    
+    /* Subheader Styling */
+    h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1d1d1f;
+        letter-spacing: -0.3px;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+def main():
+    """Main application function."""
+    
+    # Hero Section with Dunham Bush branding - Apple Style
+    st.markdown('<div class="hero-container">', unsafe_allow_html=True)
+    
+    logo_paths = ['dunham_bush_logo.png', 'dunham_bush_logo.jpg', 'dunham_bush_logo.svg', 'logo.png', 'logo.jpg', 'logo.svg']
+    logo_found = None
+    for logo_path in logo_paths:
+        if os.path.exists(logo_path):
+            logo_found = logo_path
+            break
+    
+    if logo_found:
+        st.image(logo_found, width=180)
+        st.markdown('<h1 class="company-name" style="margin-top: 1.5rem;">Dunham-Bush</h1>', unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="company-header">
+            <h1 class="company-name">Dunham-Bush</h1>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown('<h1 class="main-header">Chiller Picker Pro</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">Professional chiller selection and comparison tool</p>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Sidebar for navigation - Apple Style
+    with st.sidebar:
+        st.markdown('<div style="margin-bottom: 0.5rem;"></div>', unsafe_allow_html=True)
+        
+        page = st.radio(
+            "Navigation",
+            ["Search Chillers", "Import Data", "Database Stats", "Manage Data"],
+            index=0,
+            label_visibility="collapsed"
+        )
+        
+        # Map clean names back to emoji versions for routing
+        page_map = {
+            "Search Chillers": "🔍 Search Chillers",
+            "Import Data": "📥 Import Data",
+            "Database Stats": "📊 Database Stats",
+            "Manage Data": "⚙️ Manage Data"
+        }
+        page = page_map[page]
+        
+        st.markdown('<div style="margin-top: 2rem;"></div>', unsafe_allow_html=True)
+        st.info("Professional chiller selection tool with advanced filtering and comparison features.")
+    
+    # Route to appropriate page
+    if page == "🔍 Search Chillers":
+        search_page()
+    elif page == "📥 Import Data":
+        import_page()
+    elif page == "📊 Database Stats":
+        stats_page()
+    elif page == "⚙️ Manage Data":
+        manage_page()
+
+# Initialize session state for search history
+if 'search_history' not in st.session_state:
+    st.session_state.search_history = []
+
+def add_to_search_history(capacity: float, ambient: int, ewt: float, lwt: float):
+    """Add a search to history (keep last 5)."""
+    search_entry = {
+        'capacity': capacity,
+        'ambient': ambient,
+        'ewt': ewt,
+        'lwt': lwt,
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    # Remove duplicates (same search parameters)
+    st.session_state.search_history = [
+        s for s in st.session_state.search_history 
+        if not (s['capacity'] == capacity and s['ambient'] == ambient and 
+                s['ewt'] == ewt and s['lwt'] == lwt)
+    ]
+    # Add new search at the beginning
+    st.session_state.search_history.insert(0, search_entry)
+    # Keep only last 5
+    st.session_state.search_history = st.session_state.search_history[:5]
+
+def create_efficiency_comparison_chart(chillers: List[Dict]) -> go.Figure:
+    """Create a side-by-side efficiency comparison chart."""
+    if not chillers:
+        return None
+    
+    models = [ch.get('model', f"Model {i+1}") for i, ch in enumerate(chillers)]
+    efficiencies = [ch.get('efficiency_kw_per_ton') for ch in chillers]
+    
+    # Filter out None values
+    valid_data = [(m, e) for m, e in zip(models, efficiencies) if e is not None]
+    if not valid_data:
+        return None
+    
+    # Sort by efficiency (highest to lowest)
+    valid_data_sorted = sorted(valid_data, key=lambda x: x[1], reverse=True)
+    
+    models_clean, efficiencies_clean = zip(*valid_data_sorted)
+    
+    fig = go.Figure(data=[
+        go.Bar(
+            x=list(models_clean),
+            y=list(efficiencies_clean),
+            marker_color='#1f77b4',
+            text=[f'{e:.3f}' for e in efficiencies_clean],
+            textposition='outside'
+        )
+    ])
+    
+    fig.update_layout(
+        title='Efficiency Comparison (kW/ton)',
+        xaxis_title='Chiller Model',
+        yaxis_title='Efficiency (kW/ton)',
+        height=700,
+        showlegend=False,
+        xaxis={'tickangle': -45},
+        margin=dict(l=50, r=50, t=50, b=100)
+    )
+    
+    return fig
+
+def export_comparison_report(chillers: List[Dict], search_params: Dict) -> str:
+    """Generate a CSV comparison report."""
+    if not chillers:
+        return None
+    
+    # Prepare data for export
+    export_data = []
+    for ch in chillers:
+        export_data.append({
+            'Model': ch.get('model', ''),
+            'Manufacturer': ch.get('manufacturer', ''),
+            'Capacity (tons)': ch.get('capacity_tons', ''),
+            'Efficiency (kW/ton)': ch.get('efficiency_kw_per_ton', ''),
+            'Waterflow (USgpm)': ch.get('waterflow_usgpm', ''),
+            'Ambient (°F)': ch.get('ambient_f', ''),
+            'EWT (°C)': ch.get('ewt_c', ''),
+            'LWT (°C)': ch.get('lwt_c', ''),
+            'Unit kW': ch.get('unit_kw', ''),
+            'Compressor kW': ch.get('compressor_kw', ''),
+            'Fan kW': ch.get('fan_kw', ''),
+            'IPLV (kW/ton)': ch.get('iplv_kw_per_ton', ''),
+            'MCA (Amps)': ch.get('mca_amps', ''),
+            'Pressure Drop (psi)': ch.get('pressure_drop_psi', ''),
+            'Pressure Drop (ft.w.g)': ch.get('pressure_drop_ftwg', ''),
+            'Length (in)': ch.get('length_in', ''),
+            'Width (in)': ch.get('width_in', ''),
+            'Height (in)': ch.get('height_in', '')
+        })
+    
+    df = pd.DataFrame(export_data)
+    csv = df.to_csv(index=False)
+    return csv
+
+def search_page():
+    """Main search interface."""
+    
+    # Check if database has data
+    stats = db.get_database_stats()
+    if stats['total_chillers'] == 0:
+        st.warning("No chiller model data found. Please import data first using the 'Import Data' page.")
+        return
+    
+    st.header("Search for Chillers")
+    
+    # Quick Filters Section
+    st.subheader("⚡ Quick Filters")
+    col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
+    
+    with col_f1:
+        if st.button("50-100 tons", use_container_width=True, key="qf_50_100"):
+            st.session_state.quick_filter_capacity = 75.0
+            st.rerun()
+    with col_f2:
+        if st.button("100-200 tons", use_container_width=True, key="qf_100_200"):
+            st.session_state.quick_filter_capacity = 150.0
+            st.rerun()
+    with col_f3:
+        if st.button("200+ tons", use_container_width=True, key="qf_200_plus"):
+            st.session_state.quick_filter_capacity = 250.0
+            st.rerun()
+    with col_f4:
+        if st.button("Clear Filter", use_container_width=True, key="qf_clear"):
+            if 'quick_filter_capacity' in st.session_state:
+                del st.session_state.quick_filter_capacity
+            st.rerun()
+    
+    # Search History Section
+    if st.session_state.search_history:
+        with st.expander("📚 Search History (Last 5 searches)", expanded=False):
+            for i, hist in enumerate(st.session_state.search_history):
+                col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
+                with col_h1:
+                    st.write(f"**Search {i+1}:** {hist['capacity']:.1f} tons @ {hist['ambient']}°F, {hist['ewt']}/{hist['lwt']}°C")
+                with col_h2:
+                    st.caption(hist['timestamp'])
+                with col_h3:
+                    if st.button("Use", key=f"history_{i}", use_container_width=True):
+                        st.session_state.history_capacity = hist['capacity']
+                        st.session_state.history_ambient = hist['ambient']
+                        st.session_state.history_ewt = hist['ewt']
+                        st.session_state.history_lwt = hist['lwt']
+                        st.rerun()
+    
+    st.divider()
+    
+    # Search form
+    with st.form("search_form"):
+        col1, col2 = st.columns(2)
+        
+        # Determine initial values (from quick filter, history, or defaults)
+        default_capacity = 50.0
+        if 'quick_filter_capacity' in st.session_state:
+            default_capacity = st.session_state.quick_filter_capacity
+        elif 'history_capacity' in st.session_state:
+            default_capacity = st.session_state.history_capacity
+        
+        default_ambient_idx = 1  # 105°F
+        if 'history_ambient' in st.session_state:
+            ambient_options = [95, 105, 115]
+            try:
+                default_ambient_idx = ambient_options.index(st.session_state.history_ambient)
+            except:
+                pass
+        
+        default_ewt_idx = 0  # 54°C
+        if 'history_ewt' in st.session_state:
+            ewt_options = [54, 55]
+            try:
+                default_ewt_idx = ewt_options.index(st.session_state.history_ewt)
+            except:
+                pass
+        
+        default_lwt_idx = 0  # 44°C
+        if 'history_lwt' in st.session_state:
+            lwt_options = [44, 45]
+            try:
+                default_lwt_idx = lwt_options.index(st.session_state.history_lwt)
+            except:
+                pass
+        
+        with col1:
+            capacity_tons = st.number_input(
+                "Capacity (tons)",
+                min_value=0.1,
+                max_value=1000.0,
+                value=default_capacity,
+                step=0.1,
+                help="Required cooling capacity in tons"
+            )
+            
+            ambient_f = st.selectbox(
+                "Ambient Temperature (°F)",
+                options=[95, 105, 115],
+                index=default_ambient_idx,
+                help="Ambient temperature for chiller operation"
+            )
+        
+        with col2:
+            ewt_c = st.selectbox(
+                "Entering Water Temperature (°C)",
+                options=[54, 55],
+                index=default_ewt_idx,
+                help="Entering water temperature in Celsius"
+            )
+            
+            lwt_c = st.selectbox(
+                "Leaving Water Temperature (°C)",
+                options=[44, 45],
+                index=default_lwt_idx,
+                help="Leaving water temperature in Celsius"
+            )
+        
+        search_button = st.form_submit_button("🔍 Search Chillers", use_container_width=True)
+    
+    if search_button:
+        # Clear session state after form submission
+        if 'quick_filter_capacity' in st.session_state:
+            del st.session_state.quick_filter_capacity
+        if 'history_capacity' in st.session_state:
+            del st.session_state.history_capacity
+            del st.session_state.history_ambient
+            del st.session_state.history_ewt
+            del st.session_state.history_lwt
+        # Add to search history
+        add_to_search_history(capacity_tons, ambient_f, ewt_c, lwt_c)
+        
+        # Perform search
+        selector_obj = selector.ChillerSelector()
+        results = selector_obj.find_best_chillers(capacity_tons, ambient_f, ewt_c, lwt_c)
+        
+        # Store results in session state for export
+        all_best_options = [results['best_option']] + results['alternatives']
+        all_best_options = [opt for opt in all_best_options if opt is not None]
+        st.session_state.last_search_results = {
+            'chillers': all_best_options,
+            'all_matches': results['all_matches'],
+            'search_params': {
+                'capacity': capacity_tons,
+                'ambient': ambient_f,
+                'ewt': ewt_c,
+                'lwt': lwt_c
+            }
+        }
+        
+        # Display search summary
+        if not results['no_matches']:
+            search_summary = selector_obj.get_search_summary(results['search_info'])
+            st.markdown(f'<div class="search-summary"><strong>Search Results:</strong> {search_summary}</div>', unsafe_allow_html=True)
+        
+        # Display results
+        if results['no_matches']:
+            if results['fallback_available']:
+                st.error("No chillers found for the specified ambient temperature.")
+                st.info("Available ambient temperatures in database:")
+                for fallback in results['fallback_available']:
+                    st.write(f"- {fallback['ambient_f']}°F ({fallback['count']} chillers)")
+            else:
+                st.error("No chillers found matching your criteria. Try adjusting the capacity range or import more data.")
+        else:
+            # Efficiency Comparison Chart
+            if all_best_options:
+                st.subheader("📊 Efficiency Comparison")
+                efficiency_chart = create_efficiency_comparison_chart(all_best_options)
+                if efficiency_chart:
+                    st.plotly_chart(efficiency_chart, use_container_width=True)
+                else:
+                    st.info("Efficiency data not available for comparison.")
+                st.divider()
+            
+            # Best 3 Options
+            if all_best_options:
+                st.subheader("🏆 Best 3 Options")
+                
+                # Export button
+                csv_data = export_comparison_report(all_best_options, {
+                    'capacity': capacity_tons,
+                    'ambient': ambient_f,
+                    'ewt': ewt_c,
+                    'lwt': lwt_c
+                })
+                if csv_data:
+                    st.download_button(
+                        label="📥 Export Comparison Report (CSV)",
+                        data=csv_data,
+                        file_name=f"chiller_comparison_{capacity_tons}tons_{ambient_f}F.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="export_btn"
+                    )
+                    st.divider()
+                
+                # Display the best option first
+                if results['best_option']:
+                    display_chiller_card(results['best_option'], "Best Match", "best-option")
+                
+                # Display alternatives
+                if results['alternatives']:
+                    for i, alt in enumerate(results['alternatives']):
+                        if alt:
+                            if i == 0 and len(results['alternatives']) >= 2:
+                                display_chiller_card(alt, "Higher Capacity", "alternative")
+                            elif i == 1 and len(results['alternatives']) >= 2:
+                                display_chiller_card(alt, "Lower Capacity", "alternative")
+                            else:
+                                display_chiller_card(alt, f"Option {i+2}", "alternative")
+            
+            # All matches (collapsible)
+            if len(results['all_matches']) > 3:
+                with st.expander(f"View All {len(results['all_matches'])} Matches"):
+                    display_all_matches_table(results['all_matches'])
+
+def display_chiller_card(chiller_data: dict, title: str, card_class: str):
+    """Display a chiller card with main metrics and expandable details."""
+    
+    formatted = selector.ChillerSelector().format_chiller_display(chiller_data)
+    
+    with st.container():
+        st.markdown(f'<div class="chiller-card {card_class}">', unsafe_allow_html=True)
+        
+        # Chiller title and info
+        chiller_name = formatted['details']['model']
+        manufacturer = formatted['details']['manufacturer']
+        
+        st.subheader(f"{chiller_name} ({manufacturer})")
+        st.caption(formatted['temp_info'])
+        
+        # Main metrics with custom styling
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            capacity = formatted['capacity_tons']
+            st.markdown(f'''
+            <div class="metric-container">
+                <div class="metric-value">{capacity:.1f} tons</div>
+                <div class="metric-label">Capacity</div>
+            </div>
+            ''', unsafe_allow_html=True)
+        
+        with col2:
+            efficiency = formatted['efficiency_kw_per_ton']
+            st.markdown(f'''
+            <div class="metric-container">
+                <div class="metric-value">{efficiency:.3f} kW/ton</div>
+                <div class="metric-label">Efficiency</div>
+            </div>
+            ''', unsafe_allow_html=True)
+        
+        with col3:
+            unit_kw = formatted['details']['unit_kw']
+            if unit_kw:
+                st.markdown(f'''
+                <div class="metric-container">
+                    <div class="metric-value">{unit_kw:.1f} kW</div>
+                    <div class="metric-label">Unit kW</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="metric-container">
+                    <div class="metric-value">—</div>
+                    <div class="metric-label">Unit kW</div>
+                </div>
+                ''', unsafe_allow_html=True)
+        
+        # Expandable details
+        with st.expander("View more details", expanded=False):
+            details = formatted['details']
+            
+            # Basic Info Section
+            st.subheader("Basic Information")
+            
+            basic_info = [
+                ("Model", details['model']),
+                ("Manufacturer", details['manufacturer']),
+                ("Model Prefix", details.get('model_prefix', 'N/A')),
+                ("Folder", details.get('folder_name', 'N/A'))
+            ]
+            
+            for label, value in basic_info:
+                if value and value != 'N/A':
+                    col1, col2 = st.columns([1, 2])
+                    with col1:
+                        st.write(f"**{label}:**")
+                    with col2:
+                        st.write(value)
+            
+            # Performance Section
+            st.subheader("Performance Data")
+            
+            perf_info = []
+            if details['unit_kw']:
+                perf_info.append(("Unit kW", f"{details['unit_kw']:.1f}"))
+            if details['compressor_kw']:
+                perf_info.append(("Compressor kW", f"{details['compressor_kw']:.1f}"))
+            if details['fan_kw']:
+                perf_info.append(("Fan kW", f"{details['fan_kw']:.1f}"))
+            if details['iplv_kw_per_ton']:
+                perf_info.append(("IPLV", f"{details['iplv_kw_per_ton']:.3f} kW/ton"))
+            if details['mca_amps']:
+                perf_info.append(("MCA", f"{details['mca_amps']:.0f} A"))
+            
+            for label, value in perf_info:
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.write(f"**{label}:**")
+                with col2:
+                    st.write(value)
+            
+            # Physical Specs Section
+            st.subheader("Physical Specifications")
+            
+            if details['pressure_drop_psi'] and details['pressure_drop_ftwg']:
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.write("**Pressure Drop:**")
+                with col2:
+                    st.write(f"{details['pressure_drop_psi']:.1f} psi / {details['pressure_drop_ftwg']:.1f} ft.w.g")
+            
+            dims = []
+            if details['length_in']:
+                dims.append(f"L: {details['length_in']:.1f}\"")
+            if details['width_in']:
+                dims.append(f"W: {details['width_in']:.1f}\"")
+            if details['height_in']:
+                dims.append(f"H: {details['height_in']:.1f}\"")
+            
+            if dims:
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.write("**Dimensions:**")
+                with col2:
+                    st.write(' × '.join(dims))
+            
+            if details['notes']:
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.write("**Notes:**")
+                with col2:
+                    st.write(details['notes'])
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+def display_all_matches_table(all_matches: list):
+    """Display all matches in a table format."""
+    
+    if not all_matches:
+        st.write("No matches found.")
+        return
+    
+    # Create DataFrame for display
+    display_data = []
+    for chiller in all_matches:
+        formatted = selector.ChillerSelector().format_chiller_display(chiller)
+        display_data.append({
+            'Rank': chiller.get('_rank', ''),
+            'Model': formatted['details']['model'],
+            'Capacity (tons)': f"{formatted['capacity_tons']:.1f}" if formatted['capacity_tons'] else "—",
+            'Efficiency (kW/ton)': f"{formatted['efficiency_kw_per_ton']:.3f}" if formatted['efficiency_kw_per_ton'] else "—",
+            'Waterflow (USgpm)': f"{formatted['waterflow_usgpm']:.1f}" if formatted['waterflow_usgpm'] else "—",
+            'Ambient': f"{chiller.get('ambient_f', '')}°F" if chiller.get('ambient_f') else "—",
+            'Cap Delta': f"{chiller.get('_cap_delta', 0):.1f}" if chiller.get('_cap_delta') is not None else "—"
+        })
+    
+    df = pd.DataFrame(display_data)
+    st.dataframe(df, use_container_width=True)
+
+def import_page():
+    """Data import interface."""
+    
+    st.header("Import Chiller Data")
+    
+    # Tabs for different import methods
+    tab1, tab2 = st.tabs(["📋 Paste & Parse", "📁 File Upload"])
+    
+    with tab1:
+        st.subheader("Paste Table Data")
+        st.write("Paste your chiller specification table below. The system will automatically detect the format.")
+        
+        # Batch assignment options
+        with st.expander("Batch Assignment Options"):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                batch_ambient = st.selectbox(
+                    "Set Ambient for All Rows",
+                    options=[None, 95, 105, 115],
+                    help="Apply this ambient temperature to all imported rows"
+                )
+            
+            with col2:
+                batch_ewt = st.selectbox(
+                    "Set EWT for All Rows (°C)",
+                    options=[None, 54, 55],
+                    index=0,
+                    help="Apply this EWT to all imported rows"
+                )
+            
+            with col3:
+                batch_lwt = st.selectbox(
+                    "Set LWT for All Rows (°C)",
+                    options=[None, 44, 45],
+                    index=0,
+                    help="Apply this LWT to all imported rows"
+                )
+        
+        # Text area for pasting
+        pasted_data = st.text_area(
+            "Paste your table here:",
+            height=300,
+            help="Paste tabular data with headers. Supports tab-separated or space-separated formats."
+        )
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            parse_button = st.button("Parse Data", type="primary", use_container_width=True)
+        
+        with col2:
+            # Check if we have parsed data ready to import
+            if 'parsed_df' in st.session_state and not st.session_state['parsed_df'].empty:
+                import_button = st.button("Import to Database", type="primary", use_container_width=True, key="import_btn")
+            else:
+                import_button = False
+                st.button("Import to Database", disabled=True, use_container_width=True, key="import_btn_disabled")
+                st.caption("Parse data first to enable import")
+        
+        # Handle parse button
+        if parse_button:
+            if pasted_data.strip():
+                with st.spinner("Parsing data..."):
+                    # Parse the data
+                    df, errors = importer.parse_table_text(
+                        pasted_data, 
+                        ambient_f=batch_ambient,
+                        ewt_c=batch_ewt,
+                        lwt_c=batch_lwt
+                    )
+                
+                if errors:
+                    for error in errors:
+                        st.error(f"❌ {error}")
+                
+                if not df.empty:
+                    # Store parsed data in session state
+                    st.session_state['parsed_df'] = df
+                    st.session_state['parsed_errors'] = errors
+                    st.success(f"✅ Successfully parsed {len(df)} records!")
+                    
+                    # Show preview
+                    importer.preview_parsed_data(df)
+                    st.rerun()
+                else:
+                    st.error("❌ No data could be parsed. Check the format and try again.")
+            else:
+                st.warning("⚠️ Please paste some data first.")
+        
+        # Handle import button
+        if import_button and 'parsed_df' in st.session_state:
+            df = st.session_state['parsed_df']
+            with st.spinner(f"Importing {len(df)} records..."):
+                imported_count, import_errors = importer.import_chillers_from_dataframe(df, db)
+            
+            if import_errors:
+                for error in import_errors:
+                    st.error(f"❌ {error}")
+            
+            if imported_count > 0:
+                st.success(f"✅ Successfully imported {imported_count} chiller records!")
+                st.balloons()  # Celebration animation!
+                st.info("💡 Go to 'Database Stats' to see your imported data.")
+                # Clear parsed data after import
+                del st.session_state['parsed_df']
+                if 'parsed_errors' in st.session_state:
+                    del st.session_state['parsed_errors']
+                st.rerun()
+            else:
+                st.error("❌ No records were imported. Check the errors above.")
+            
+        # Show parsed data if available
+        if 'parsed_df' in st.session_state and not st.session_state['parsed_df'].empty:
+            df = st.session_state['parsed_df']
+            if not parse_button and not import_button:  # Only show if not just parsed/imported
+                st.info("📋 Showing previously parsed data. You can import it or parse new data.")
+                importer.preview_parsed_data(df)
+    
+    with tab2:
+        st.subheader("Upload File")
+        st.write("Upload a CSV or TSV file containing chiller specifications.")
+        
+        uploaded_file = st.file_uploader(
+            "Choose a file",
+            type=['csv', 'tsv', 'txt'],
+            help="Upload a CSV, TSV, or text file with chiller data"
+        )
+        
+        if uploaded_file:
+            # Batch assignment options for file upload
+            with st.expander("Batch Assignment Options"):
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    file_ambient = st.selectbox(
+                        "Set Ambient for All Rows",
+                        options=[None, 95, 105, 115],
+                        key="file_ambient",
+                        help="Apply this ambient temperature to all imported rows"
+                    )
+                
+                with col2:
+                    file_ewt = st.selectbox(
+                        "Set EWT for All Rows (°C)",
+                        options=[None, 54, 55],
+                        index=0,
+                        key="file_ewt",
+                        help="Apply this EWT to all imported rows"
+                    )
+                
+                with col3:
+                    file_lwt = st.selectbox(
+                        "Set LWT for All Rows (°C)",
+                        options=[None, 44, 45],
+                        index=0,
+                        key="file_lwt",
+                        help="Apply this LWT to all imported rows"
+                    )
+            
+            if st.button("Import File", type="primary", use_container_width=True):
+                with st.spinner("Importing file..."):
+                    # Save uploaded file temporarily
+                    with open("temp_upload.csv", "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    
+                    # Import from file
+                    imported_count, errors = importer.import_from_file(
+                        "temp_upload.csv",
+                        ambient_f=file_ambient,
+                        ewt_c=file_ewt,
+                        lwt_c=file_lwt
+                    )
+                
+                if errors:
+                    for error in errors:
+                        st.error(f"❌ {error}")
+                
+                if imported_count > 0:
+                    st.success(f"✅ Successfully imported {imported_count} chiller records!")
+                    st.balloons()  # Celebration animation!
+                    st.info("💡 Go to 'Database Stats' to see your imported data.")
+                    st.rerun()
+                else:
+                    st.error("❌ No records were imported. Check the errors above.")
+
+def stats_page():
+    """Database statistics page."""
+    
+    st.header("Database Statistics")
+    
+    # Get database stats
+    stats = db.get_database_stats()
+    
+    # Display metrics
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Chiller Types", len(db.get_organized_data()))
+    
+    with col2:
+        st.metric("Total Models", stats['total_chillers'])
+    
+    with col3:
+        st.metric("Temperature Folders", len(db.get_all_folders()))
+    
+    # Show organized data by manufacturer and folder
+    if stats['total_chillers'] > 0:
+        st.subheader("📁 Data Organization")
+        
+        organized_data = db.get_organized_data()
+        all_folders = db.get_all_folders()
+        
+        if organized_data:
+            for model_prefix, model_data in organized_data.items():
+                manufacturer = model_data.get('manufacturer', 'Unknown')
+                folders = model_data.get('folders', {})
+                
+                with st.expander(f"❄️ **{model_prefix}** Chiller ({manufacturer})", expanded=True):
+                    for folder_name, folder_data in folders.items():
+                        col1, col2, col3 = st.columns([2, 1, 1])
+                        
+                        with col1:
+                            st.write(f"📂 **{folder_name}**")
+                            st.caption(f"Models: {', '.join(folder_data['models'][:5])}{'...' if len(folder_data['models']) > 5 else ''}")
+                        
+                        with col2:
+                            st.metric("Models", folder_data['count'])
+                        
+                        with col3:
+                            if st.button("View Details", key=f"view_{model_prefix}_{folder_name}"):
+                                st.session_state[f"view_folder_{model_prefix}_{folder_name}"] = True
+                        
+                        # Show folder details if requested
+                        if st.session_state.get(f"view_folder_{model_prefix}_{folder_name}", False):
+                            folder_chillers = db.get_chillers_by_folder(model_prefix, folder_name)
+                            if folder_chillers:
+                                folder_df = pd.DataFrame(folder_chillers)
+                                display_cols = ['model', 'capacity_tons', 'efficiency_kw_per_ton', 'waterflow_usgpm']
+                                available_cols = [col for col in display_cols if col in folder_df.columns]
+                                if available_cols:
+                                    st.dataframe(folder_df[available_cols], use_container_width=True)
+                            
+                            if st.button("Close", key=f"close_{model_prefix}_{folder_name}"):
+                                st.session_state[f"view_folder_{model_prefix}_{folder_name}"] = False
+                                st.rerun()
+        else:
+            st.info("No organized data found. Import some data to see the folder structure.")
+    
+    # Show available ambients
+    available_ambients = db.get_available_ambients()
+    if available_ambients:
+        st.subheader("🌡️ Available Ambient Temperatures")
+        for ambient in available_ambients:
+            count = len(db.get_chillers_by_criteria(1, ambient, None, None, 1.0))  # Get count for this ambient
+            st.write(f"- {ambient}°F: {count} chillers")
+
+def manage_page():
+    """Data management page for editing folders and deleting records."""
+    
+    st.header("⚙️ Manage Data")
+    
+    # Check if database has data
+    stats = db.get_database_stats()
+    if stats['total_chillers'] == 0:
+        st.warning("No chiller model data found. Please import data first using the 'Import Data' page.")
+        return
+    
+    # Get organized data
+    organized_data = db.get_organized_data()
+    
+    if not organized_data:
+        st.info("No organized data found. Import some data first.")
+        return
+    
+    # Display overview
+    st.subheader("📁 Folder Overview")
+    
+    # Show each model prefix and its folders
+    for model_prefix, model_data in organized_data.items():
+        manufacturer = model_data.get('manufacturer', 'Unknown')
+        folders = model_data.get('folders', {})
+        
+        st.markdown(f"### ❄️ **{model_prefix}** Chiller ({manufacturer})")
+        
+        for folder_name, folder_data in folders.items():
+            with st.expander(f"📂 {folder_name} ({folder_data['count']} models)", expanded=False):
+                # Show folder actions
+                col1, col2, col3 = st.columns([2, 1, 1])
+                
+                with col1:
+                    st.write(f"**Folder:** {folder_name}")
+                    st.caption(f"Models: {', '.join(folder_data['models'][:10])}{'...' if len(folder_data['models']) > 10 else ''}")
+                
+                with col2:
+                    # Edit folder name button
+                    if st.button("✏️ Edit Folder", key=f"edit_{model_prefix}_{folder_name}"):
+                        st.session_state[f"editing_{model_prefix}_{folder_name}"] = True
+                
+                with col3:
+                    # Delete folder button
+                    if st.button("🗑️ Delete Folder", key=f"delete_folder_{model_prefix}_{folder_name}"):
+                        st.session_state[f"confirm_delete_folder_{model_prefix}_{folder_name}"] = True
+                
+                # Edit folder name interface
+                if st.session_state.get(f"editing_{model_prefix}_{folder_name}", False):
+                    st.markdown("---")
+                    new_folder_name = st.text_input(
+                        "New Folder Name:",
+                        value=folder_name,
+                        key=f"new_name_{model_prefix}_{folder_name}"
+                    )
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✓ Save", key=f"save_{model_prefix}_{folder_name}"):
+                            if new_folder_name and new_folder_name != folder_name:
+                                if db.update_folder_name(model_prefix, folder_name, new_folder_name):
+                                    st.success(f"Folder renamed successfully!")
+                                    st.session_state[f"editing_{model_prefix}_{folder_name}"] = False
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to rename folder.")
+                            else:
+                                st.warning("Please enter a different folder name.")
+                    with col2:
+                        if st.button("✗ Cancel", key=f"cancel_{model_prefix}_{folder_name}"):
+                            st.session_state[f"editing_{model_prefix}_{folder_name}"] = False
+                            st.rerun()
+                
+                # Confirm delete folder
+                if st.session_state.get(f"confirm_delete_folder_{model_prefix}_{folder_name}", False):
+                    st.markdown("---")
+                    st.warning(f"⚠️ Are you sure you want to delete the entire folder '{folder_name}'? This will delete {folder_data['count']} record(s).")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✓ Yes, Delete Folder", key=f"confirm_delete_{model_prefix}_{folder_name}", type="primary"):
+                            deleted_count = db.delete_folder(model_prefix, folder_name)
+                            st.success(f"Deleted folder '{folder_name}' ({deleted_count} records)")
+                            st.session_state[f"confirm_delete_folder_{model_prefix}_{folder_name}"] = False
+                            st.rerun()
+                    with col2:
+                        if st.button("✗ Cancel", key=f"cancel_delete_{model_prefix}_{folder_name}"):
+                            st.session_state[f"confirm_delete_folder_{model_prefix}_{folder_name}"] = False
+                            st.rerun()
+                
+                # Show individual records in this folder
+                st.markdown("---")
+                st.write("**Records in this folder:**")
+                
+                folder_chillers = db.get_chillers_by_folder(model_prefix, folder_name)
+                if folder_chillers:
+                    # Create a DataFrame for display
+                    display_df = pd.DataFrame(folder_chillers)
+                    
+                    # Select columns to display
+                    display_cols = ['id', 'model', 'capacity_tons', 'efficiency_kw_per_ton', 'waterflow_usgpm']
+                    available_cols = [col for col in display_cols if col in display_df.columns]
+                    
+                    if available_cols:
+                        # Display the table
+                        st.dataframe(
+                            display_df[available_cols],
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        # Delete individual records
+                        st.markdown("**Delete Individual Records:**")
+                        delete_ids = st.multiselect(
+                            f"Select records to delete from {folder_name}:",
+                            options=display_df['id'].tolist(),
+                            format_func=lambda x: f"{display_df[display_df['id']==x]['model'].iloc[0]} (ID: {x})",
+                            key=f"delete_select_{model_prefix}_{folder_name}"
+                        )
+                        
+                        if delete_ids:
+                            if st.button(f"🗑️ Delete {len(delete_ids)} Selected Record(s)", key=f"delete_records_{model_prefix}_{folder_name}", type="primary"):
+                                deleted_count = 0
+                                for chiller_id in delete_ids:
+                                    if db.delete_chiller(chiller_id):
+                                        deleted_count += 1
+                                
+                                if deleted_count > 0:
+                                    st.success(f"Successfully deleted {deleted_count} record(s)")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete records.")
+                
+                # Quick delete by ID
+                st.markdown("---")
+                st.write("**Quick Delete by ID:**")
+                delete_id = st.number_input(
+                    f"Enter record ID to delete from {folder_name}:",
+                    min_value=1,
+                    key=f"quick_delete_{model_prefix}_{folder_name}"
+                )
+                if st.button("Delete", key=f"quick_delete_btn_{model_prefix}_{folder_name}"):
+                    # Verify the record belongs to this folder
+                    chiller = db.get_chiller_by_id(delete_id)
+                    if chiller and chiller.get('model_prefix') == model_prefix and chiller.get('folder_name') == folder_name:
+                        if db.delete_chiller(delete_id):
+                            st.success(f"Record ID {delete_id} deleted successfully")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete record.")
+                    else:
+                        st.error(f"Record ID {delete_id} does not belong to this folder.")
+
+if __name__ == "__main__":
+    main()
